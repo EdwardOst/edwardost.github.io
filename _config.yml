@@ -3,7 +3,9 @@
 permalink: /:categories/:year/:month/:day/:title 
 
 exclude: [".rvmrc", ".rbenv-version", "README.md", "Rakefile", "changelog.md"]
-pygments: true
+# not supported on github pages
+#pygments: true
+highlighter: rouge
 
 # use https://github.com/gettalong/kramdown Markdown interpreter
 markdown: kramdown
