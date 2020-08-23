@@ -1,0 +1,21 @@
+{
+    "results" : [{
+            "status" : "Updated",
+            "operation_id" : 1
+        }, {
+            "status" : "Updated",
+            "operation_id" : 2
+        }, {
+            "status" : "Updated",
+            "operation_id" : 3
+        }, {
+            "status" : "Updated",
+            "operation_id" : 4
+        }
+    ],
+    "summary" : {
+        "deleted" : 0,
+        "failed" : 0,
+        "updated" : 4
+    }
+};
