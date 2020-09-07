@@ -1,0 +1,22 @@
+I"I
+<p>Change data capture is easy to use in Talend Studio.  Here is a short eight minute video for <a href="http://www.youtube.com/watch?v=6SRNz83Wyo0">CDC</a> that will show you what you need to get started.</p>
+
+<p>You can find documentation and a step-by-step example for CDC in the <a href="https://help.talend.com/display/TalendComponentsReferenceGuide53EN/tMysqlCDC">Component Reference Guide</a> at help.talend.com.</p>
+
+<p>The sample <a href="/talend/di/cdc/cdc_crm.sql">CRM schema</a> and <a href="/talend/di/cdc/cdc_dwh.sql">DWH schema</a> as well as the <a href="/talend/di/cdc/cdc_demo.zip">sample jobs</a> are available.  Load the sample jobs into the integration perspective using Import Items.</p>
+
+<p>The use case starts by generating a common set of data and replicating it to two sample databases in mysql, CRM and DWH.</p>
+
+<p><img src="/talend/di/cdc/cdc_create_customers.png" alt="Generate and replicated data" /></p>
+
+<p>The CDC subscription is then created in Talend Studio.  These steps are shown in the video.</p>
+
+<p>After the subscription is created, changes are made to the CRM database.</p>
+
+<p><img src="/talend/di/cdc/cdc_modify_crm_customers.png" alt="Modify CRM" /></p>
+
+<p>Finally, changes are replicated to the DWH.</p>
+
+<p><img src="/talend/di/cdc/cdc_replicate_changes_from_to_dwh.png" alt="Replicate Changes" /></p>
+
+:ET

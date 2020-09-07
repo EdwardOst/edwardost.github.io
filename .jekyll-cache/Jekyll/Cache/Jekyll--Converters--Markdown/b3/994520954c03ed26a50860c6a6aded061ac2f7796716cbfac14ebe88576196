@@ -1,0 +1,177 @@
+I"3'
+<p><a href="http://www.talend.com/products/esb">Talend ESB</a> provides an open source <a href="http://www.talend.com/download/esb">Talend Studio</a> with a GUI designer for <a href="http://camel.apache.org/">Apache Camel</a> routes running in <a href="http://karaf.apache.org/">Apache Karaf</a>.</p>
+
+<p>While many Camel components are natively represented in the Mediation perspectives tool palette, many are not.
+In these cases the <a href="https://help.talend.com/display/TalendESBMediationComponentsReferenceGuide53EN/cMessagingEndpoint">cMessagingEndpoint</a> can be used as a general purpose component and configured with a URI.
+Additional work may be necessary to add the necessary jar dependencies as well as configuring the supporting camel Components in the Camel Context.
+This post walks through how to do this for the <a href="http://camel.apache.org/mongodb.html">Camel MongoDB</a>.</p>
+
+<p>The <a href="/talend/camel/mongodb/mongodbroutes.zip">sample route</a> can be imported using Import Items in the Mediation perspective.</p>
+
+<h3 id="install-mongodb-and-talend-open-studio">Install MongoDB and Talend Open Studio</h3>
+
+<p>Presumably you have <a href="http://docs.mongodb.org/manual/installation/">installed MongoDB</a> already.</p>
+
+<p>Likewise you have hopefully already installed <a href="http://www.talend.com/download/esb">Talend Open Studio</a>.  It is just an xcopy install.</p>
+
+<p>Import the <a href="/talend/camel/mongodb/movies.json">movies</a> into a movielens database</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mongoimport --db movielens --collection movies --file movies.json
+</code></pre></div></div>
+
+<h3 id="download-camel-dependencies">Download Camel Dependencies</h3>
+<p>First, find out which version of Camel is being used by your version of Talend Studio.
+Check the <a href="https://help.talend.com/display/TalendEnterpriseESBReleaseNotes53EN">Talend Release Notes</a> on help.talend.com and see the section titled <a href="https://help.talend.com/display/TalendEnterpriseESBReleaseNotes53EN/ESB%3A+Changes+in+Apache+Projects">ESB: Changes in Apache Projects</a>.
+You may need to create and register a free account to use help.talend.com.</p>
+
+<p>Once you know which version of Camel is in use by Tallend, determine which jars are necessary for the component you are interested in.
+In this example we are interested in MongoDB.
+The <a href="http://camel.apache.org/mongodb.html">Camel MongoDB</a> documentation shows the following:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.camel&lt;/groupId&gt;
+    &lt;artifactId&gt;camel-mongodb&lt;/artifactId&gt;
+    &lt;version&gt;2.10.4&lt;/version&gt;    &lt;!-- use the same version as your Camel core version --&gt;
+&lt;/dependency&gt;
+</code></pre></div></div>
+
+<p>Talend Studo does not directly use Maven but we will to make sure that we have a single consistent place to store any jars we download, and so that all transitive jar dependencies are downloaded.
+Install <a href="http://maven.apache.org">Apache Maven</a> if it is not already installed.</p>
+
+<p>Now use maven from the commandline to download the desired dependency.<br />
+It will be installed in ~/.m2/repository/… in a path matching the group id, e.g. org/apache/camel
+<em>Be sure to use the same version as the Camel version identified above</em>.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mvn dependency:get -Dartifact=org.apache.camel:camel-mongodb:2.10.4:jar -DrepoUrl=http://repo1.maven.org/maven2/
+</code></pre></div></div>
+
+<p>In this case you will also need a separate driver for MongoDB itself.<br />
+A quick search of <a href="http://mvnrepository.com/">Maven Central</a> for mongodb and driver finds the latest entry.
+Since this is not a Camel Component but a driver MongoDB itself, use the latest version.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mvn dependency:get -Dartifact=org.mongodb:mongo-java-driver:LATEST:jar -DrepoUrl=http://repo1.maven.org/maven2/
+</code></pre></div></div>
+
+<p>You have now downloaded all the dependencies you need.</p>
+
+<h3 id="configure-studio-route-to-use-dependencies">Configure Studio Route to use Dependencies</h3>
+
+<p>These Library dependencies have to be added using the cConfig component.
+Unfortunately, since Studio does not directly use Maven adding the full list of transitive dependency jars may be required.<br />
+Nor will it be obvious (short of checking the POM) which libraries are needed.
+So a few iterations of compiling and adding dependencies may be needed.</p>
+
+<ul>
+  <li>Create a new Route in Mediation Perspective.</li>
+  <li>Add a cConfig Component.</li>
+  <li>Add dependencies to the cConfig component.</li>
+</ul>
+
+<p>In this case we will need three dependencies.
+The two jar dependencies downloaded above can be added as <code class="language-plaintext highlighter-rouge">External Modules</code>.
+An additional <code class="language-plaintext highlighter-rouge">Internal Module</code> is required which is the <code class="language-plaintext highlighter-rouge">camel-jackson-alldep-2.10.4.jar</code>.
+The 2.10.4 corresponds to the Camel version in use by Studio.
+Note that checking the versions of internal dependencies is a quick way to determine which version of Camel is being used by Studio.</p>
+
+<h3 id="configure-the-camel-mongodb-component">Configure the Camel MongoDB Component</h3>
+
+<p>You now need to add and configure the Camel MongoDB component to the route using the dependencies we just added.
+This requires two parts.</p>
+<ul>
+  <li>Create a MongoDB connection.</li>
+  <li>Injected the MongoDB connection into a camel-mongodb Component.</li>
+</ul>
+
+<p>This can be done with either  Spring  or a cBeanRegister component.</p>
+
+<h4 id="mongodb-connection-with-spring">MongoDB Connection with Spring</h4>
+<ul>
+  <li>Use the Spring tab to create a bean for the MongoDB connection.</li>
+  <li>Use the Spring tab to create a bean for the MongoDB Component.</li>
+  <li>
+    <p>The camel-mongodb Component acts as a factory for camel-mongodb endpoints specified in the route URI.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  &lt;bean id="myDb" class="com.mongodb.Mongo"&gt;
+      &lt;constructor-arg index="0" value="localhost"/&gt;
+  &lt;/bean&gt;
+    
+  &lt;bean id="mongodb" class="org.apache.camel.component.mongodb.MongoDbComponent"&gt;
+  &lt;/bean&gt;
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<h4 id="mongodb-with-cbean-register">MongoDB with cBean Register</h4>
+
+<ul>
+  <li>Add a cBeanRegister component to the canvass from the tool palette.</li>
+  <li>
+    <p>On the Component tab add some <code class="language-plaintext highlighter-rouge">Imports</code></p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  import com.mongodb.Mongo;
+  import java.net.UnknownHostException;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>On the Component tab add some <code class="language-plaintext highlighter-rouge">code</code> to create the mongodDB connection instance.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  Mongo mongodb;
+  try {
+      mongodb = new Mongo(context.mongoHost);
+  } catch (UnknownHostException hostException) {
+      throw new RuntimeException("Error connecting to MongoDB", hostException);
+  }
+  beanInstance = mongodb;
+</code></pre></div>    </div>
+  </li>
+  <li>Add a cBeanRegister component to the canvass from the tool palette.</li>
+  <li>
+    <p>On the Component tab add some imports</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  import org.apache.camel.component.mongodb.MongoDbComponent;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Now create the Camel Mongodb component.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  MongoDbComponent mongodbComponent = new MongoDbComponent();
+  camelContext.addComponent("mongodb", mongodbComponent);
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<h3 id="create-the-camel-route">Create the Camel Route</h3>
+<ul>
+  <li>Create the route as shown below</li>
+</ul>
+
+<p><img src="/talend/camel/mongodb/mongodb-spring.png" alt="mongodb route" /></p>
+
+<ul>
+  <li>In all the examples the query is done by example based on the payload to the mongodb endpoint.</li>
+  <li>The uri of the mongodb endpoint controls which method is invoked</li>
+  <li>
+    <p>The first queries by id</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  body: qbe id: 1
+  "mongodb:myDb?database=movielens&amp;amp;collection=movies&amp;amp;operation=&lt;strong&gt;findById&lt;/strong&gt;"
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>The second queries by the title field and uses the FindOne method to just return the first such element</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  body: qbe title: "{ title: \"Toy Story\" }"
+  "mongodb:myDb?database=movielens&amp;amp;collection=movies&amp;amp;operation=&lt;strong&gt;findOneByQuery&lt;/strong&gt;"
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>The third queries by the genre and returns all matches</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  body: qbe genre: "{ genres: \"Children\" }"
+  "mongodb:myDb?database=movielens&amp;amp;collection=movies&amp;amp;operation=&lt;strong&gt;findAll&lt;/strong&gt;"
+</code></pre></div>    </div>
+  </li>
+  <li>We split the third route to demonstratethat it returns multiple records from the mongodb endpoint.</li>
+</ul>
+
+:ET

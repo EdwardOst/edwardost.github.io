@@ -1,0 +1,76 @@
+I"�
+<p>Here is an example of Camel mediation with more advanced use of Splitter and Multicast EIP’s as well Aggregation strategies to compose REST services.
+The composed service is simultaneously exposed using REST, SOAP, and JMS endpoints.
+The camel-xmljson data format is used to provide flexible marshalling for both JSON and XML representations for the REST endpoint as well.</p>
+
+<p>The <a href="/talend/camel/splitter-multicast-rest/arin_whois.zip">exported route</a> is available for download and there is a youtube <a href="http://www.youtube.com/watch?v=e4W14jcKRyg">design</a> walk-through of the route available as well.</p>
+
+<p>The use case is as follows:</p>
+
+<ul>
+  <li>Whois Domain - <a href="https://www.arin.net/resources/whoisrws/whois_api.html">ARIN RESTful Web Service API</a></li>
+  <li>Query IP address</li>
+  <li>Capture Organization &amp; NetRange</li>
+  <li>Query Organization</li>
+  <li>Capture Address City/State</li>
+  <li>Ping first 10 IP addresses in NetRange</li>
+  <li>Return results of ping</li>
+</ul>
+
+<p><img src="/talend/camel/splitter-multicast-rest/arin_whoIs.png" alt="Splitter-Multicast-REST" /></p>
+
+<h3 id="virtual-endpoints">Virtual Endpoints</h3>
+
+<p>The actual service is mediation route is implemented as a service which is exposed using multiple transports including JMS, SOAP, and REST.
+The external endpoints make use of a common logical endpoint exposed via Direct: transport.
+Each endpoint exposes the same Managed Service in a manner appropriate for the semantics of that transport.
+Endpoint routes are at the top and shown in orange.</p>
+
+<h3 id="test-routes">Test Routes</h3>
+
+<p>The routes shown in Blue are test routes.<br />
+There are test routes for both the exposed Basic Service endpoints as well as the underlying logical service implementation.</p>
+
+<h3 id="mediation-routes">Mediation Routes</h3>
+
+<p>The actual mediation routes and implementation shown in tan.
+Calls to the external services are highlighted in yellow boxes.</p>
+
+<h3 id="splitter-aggregator">Splitter Aggregator</h3>
+
+<p>Many Camel components support aggregation strategies.<br />
+It is not always obvious to new users that there are two distinct sub-routes for these elements.<br />
+For example, in the route segment below the <a href="http://camel.apache.org/splitter.html">splitter</a> will split the original composite message and route individual messages to the processNetBlocks endpoint.
+There could be potentially very many messages being processed independently via the path shown in blue since the splitter has a 1:m relationship between inbound and outbound messages.
+When these individual messages are finished processing they can optionally be aggregated by specifying the Aggregation Strategy in the Splitter component.
+The resulting aggregated result is then routed as a single messsage to the next step on the original route shown by the line in red.</p>
+
+<p><img src="/talend/camel/splitter-multicast-rest/splitter.png" alt="Splitter" /></p>
+
+<p>The splitter component configuration is shown below.</p>
+
+<ul>
+  <li>The original xml message is parsed via the Xpath expression language.   Namespaces are intiailized since they are used by the service.</li>
+  <li>The “Use Strategy” checkbox has been selected and a custom appendAggregator specified.  In this case the aggregation strategy is implemented as a class in the Code section of the Mediation perspective.  But it could be any java bean or static method.</li>
+  <li>Parallel Processing has been selected, so the multiple parsed messages may be processed independently.</li>
+  <li>Each time a split thread finishes processing a sub-message, the result is returned to the Aggregation strategy which in this case simply appends it to the result.</li>
+</ul>
+
+<p><img src="/talend/camel/splitter-multicast-rest/splitter-config.png" alt="Splitter" /></p>
+
+<h3 id="multicast-aggregator">Multicast Aggregator</h3>
+
+<p>The <a href="http://camel.apache.org/multicast.html">Multicast</a> component is for static routing to multiple endpoints.
+In this case, the original composite service request is mediated by the bus and passed to two service invocations.
+The first results in additional ping requests based on the NetBlock data elements.
+The second is an invocation of the ARIN service to retrieve additional organization info.
+These operations can proceed in parallel based on the design, so they are invoked with the multicast operation since they are known in advance.
+If the operations were dynamic and needed to be determined at runtime then the <a href="http://camel.apache.org/recipient-list.html">Recipient List</a> would be a better choice.</p>
+
+<p>The multicast component has a similar approach to aggregation.
+If an aggregator is specified, the results of the aggregation strategy will be applied when each multicast target returns.
+The multicast targets can be specified in URI list in the Component tab of UI.</p>
+
+<p><img src="/talend/camel/splitter-multicast-rest/multicast.png" alt="Multicast" /></p>
+
+:ET

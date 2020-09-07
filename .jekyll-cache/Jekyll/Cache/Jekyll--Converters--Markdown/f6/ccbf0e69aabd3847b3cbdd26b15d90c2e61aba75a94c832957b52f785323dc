@@ -1,0 +1,446 @@
+I"ca
+<p>Here is a simple example of how to use OSGI Blueprint to create JDBC data sources via configuration rather than code.
+The example uses the OSGI <em>Config-Admin</em> service so that new datasources can be dynamically created by just deploying configuration files.</p>
+
+<p>The JDBC javax.sql.DataSource is exposed as an OSGI service and used by an Apache <a href="http://camel.apache.org/">Camel</a> client.
+The client uses <a href="http://camel.apache.org/using-osgi-blueprint-with-camel.html">camel-blueprint</a> services so <em>just the interface</em> rather than any implementation knowledge of the underlying JDBC classes is required; no reflection is used by the client.
+MySQL is used for the example, but any JDBC driver could be used which exposes a public realization of the javax.sql.DataSource.
+The <a href="http://www.talend.com/download/esb#quicktabs-product_download_tabs">Talend ESB SE</a> distribution of Apache <a href="http://karaf.apache.org/">Karaf</a> is used as the OSGI container but this will work in any Blueprint enabled OSGI container.  The Talend ESB uses the Apache <a href="http://aries.apache.org/">Aries</a> Blueprint implementation.</p>
+
+<p>The <a href="https://github.com/EdwardOst/example-osgi-jdbc">sample code</a> is available on Github.
+ TBD – There is a video design walkthrough available on YouTube as well. –</p>
+
+<h2 id="design-goals">Design Goals</h2>
+
+<p>The primary objective is to use the OSGI service registry for JDBC data sources using the Config-Admin service.
+The OSGI service model is a “micro” service model in the sense that the services can only be used within the same jvm running the OSGI container, i.e. this is not a SOA registry.
+The end result is that new datasources are made available via the OSGI service registry based on declarative configuration with zero procedural code.
+This is made possible by exposing the service using the Managed Service Factory capabilities of OSGI Config-Admin specification.
+The client uses the Blueprint container as the Dependency Injection mechanism for consuming the exposed JDBC datasource.
+It is actually the Apache <a href="http://felix.apache.org/">Felix</a> project that provides the <a href="http://felix.apache.org/documentation/subprojects/apache-felix-config-admin.html">implementation of the Config-Admin</a> specification.
+The <a href="http://www.osgi.org/javadoc/r4v42/org/osgi/service/cm/ConfigurationAdmin.html">Configuration-Admin API</a> as well as the <a href="http://www.osgi.org/Specifications/HomePage">OSGI Specification</a> are also available online.</p>
+
+<h2 id="pre-requisites">Pre-Requisites</h2>
+
+<ol>
+  <li>Install JDK.  1.6 or 1.7 will both work.</li>
+  <li>Install Apache Maven.</li>
+  <li>Download and install <a href="http://www.talend.com/download/esb#quicktabs-product_download_tabs">Talend ESB SE</a> Karaf container by unzipping it.</li>
+  <li>A working instance of Mysql with some data that you want to access.</li>
+</ol>
+
+<h2 id="demonstration">Demonstration</h2>
+
+<ol>
+  <li>
+    <p>You will need to install the mysql driver into your local maven repository.
+If you build the code from github this will happen automatically, but if you are just running from binaries use the following commands.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ mvn dependency:get -Dartifact=mysql:mysql-connector-java:5.1.26:jar -DrepoUrl=http://repo1.maven.org/maven2/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Start the karaf container from the commandline with the <code class="language-plaintext highlighter-rouge">trun</code> script in the located in the bin directory.</p>
+  </li>
+  <li>
+    <p>Install the mysql driver from the local maven repository into the karaf bundle repository using the osgi install command.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; install mvn:mysql/mysql-connector-java/5.1.26
+Bundle ID: 247
+karaf&gt; list | grep -i mysql
+[ 247] [Resolved   ] [            ] [       ] [   80] Sun Microsystems' JDBC Driver for MySQL (5.1.26)
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Install the camel-sql component.  This is available as a pre-installed feature in Talend ESB SE, so all you need to do is use features:install command.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; features:list | grep -i camel-sql
+[uninstalled] [2.12.3          ] camel-sql                               camel-2.12.3
+karaf&gt; features:install camel-sql
+Refreshing bundles org.springframework.context.support (90)
+karaf&gt; features:list | grep -i camel-sql
+[installed  ] [2.12.3          ] camel-sql                               camel-2.12.3
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Install the mysql managed service factory sample bundle</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; install -s mvn:net.eost.example.osgi.jdbc/mysql/1.0-SNAPSHOT
+karaf&gt; list | grep -i mysql
+[ 247] [Resolved   ] [            ] [       ] [   80] Sun Microsystems' JDBC Driver for MySQL (5.1.26)
+[ 250] [Active     ] [Created     ] [       ] [   80] jdbc::mysql (1.0.0.SNAPSHOT)
+karaf&gt; start 250
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Show the running Managed Service Factory.
+Note that this is <em>not</em> the javax.sql.DataSource service.
+This is the Managed Service Factory that is listening for cfg files in the /etc folder.
+When those config files are provided it will create an instance of the actual javax.sql.DataSource and register it as a service.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf@trun&gt; ls -a | grep -i -A 5 "jdbc::mysql
+    
+jdbc::mysql (250) provides:
+---------------------------
+org.osgi.service.cm.ManagedServiceFactory
+org.osgi.service.blueprint.container.BlueprintContainer
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Install the client bundle.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; install -s mvn:net.eost.example.osgi.jdbc/client/1.0-SNAPSHOT
+karaf&gt; list | grep -i "jdbc::client"
+[ 255] [Active     ] [Created     ] [       ] [   80] jdbc::client (1.0.0.SNAPSHOT)
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>If you display the log and you will see an error.  This is because no configuration file for the datasource has been deployed, and therefore no service has been instantiated.
+As a result, when the camel route runs it will not be able to resolve the reference from the camel-sql component for the myds bean.</p>
+  </li>
+  <li>
+    <p>Edit the sample msf.ds.mysql-1.cfg file so that the db parameters match your local mysql database.</p>
+  </li>
+  <li>
+    <p>Copy the sample msf.ds.mysql-1.cfg file to the karaf /etc folder.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ cp msf.ds-mysql-1.cfg ~/talend/etc
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Clear out the clustter in the log, then stop and restart the client bundle.  Then take a look at the log.  You should see the result set of your query.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; log:clear
+karaf&gt; stop 255
+karaf&gt; start 255
+karaf&gt; log:display
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Some addition exploration to familiarize yourself with both the Karaf commandline and the Karaf web console.  List the installed configurations the karaf command line.</p>
+  </li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; config:list | grep -A 5 -i msf
+</code></pre></div></div>
+
+<ol>
+  <li>List the active services from the karaf command line.</li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; services:list | grep -A 5 -i mysql
+jdbc::mysql (254) provides:
+---------------------------
+org.osgi.service.cm.ManagedServiceFactory
+org.osgi.service.blueprint.container.BlueprintContainer
+javax.sql.DataSource
+</code></pre></div></div>
+
+<ol>
+  <li>
+    <p>Show the details for services exposed by a specific bundle.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>	karaf&gt; services:ls 250    jdbc::mysql (250) provides:
+	---------------------------    Bundle-SymbolicName = mysql
+	Bundle-Version = 1.0.0.SNAPSHOT    service.pid = msf.ds.mysql
+	objectClass = org.osgi.service.cm.ManagedServiceFactory    service.id = 519    ----
+	osgi.blueprint.container.version = 1.0.0.SNAPSHOT
+	osgi.blueprint.container.symbolicname = mysql    objectClass = org.osgi.service.blueprint.container.BlueprintContainer
+	service.id = 520    ----
+	URL = jdbc:mysql://localhost:3306/customerorders    databaseName = customerorders
+	service.factoryPid = msf.ds.mysql    user = tadmin
+	osgi.jdbc.driver.name = mysql    felix.fileinstall.filename = file:/C:/Talend/5.5.1/c0/etc/msf.ds.mysql-1.cfg
+	service.pid = msf.ds.mysql.2bc9fc80-7941-4859-ab1f-b2ab5c6aaf29    service.ranking = 0
+	osgi.jdbc.driver.class = com.mysql.jdbc.Driver    serverName = localhost
+	dsname = myds_id    password = tadmin
+	portNumber = 3306    objectClass = javax.sql.DataSource
+	service.id = 526
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Show the installed configurations in the Karaf web console under the top level Configuration tab and under the Configuration Status-&gt;Configurations tab as well.</p>
+  </li>
+  <li>
+    <p>Show all of the Services under the top level Service tab and under the Configuration Status-&gt;Services tab as well.</p>
+  </li>
+  <li>
+    <p>Copy the original sample msf.ds.mysql-1.cfg to a new msf.ds.mysql-2.cfg file.<br />
+Modify the new cfg to have a different dsname property so that it does not conflict with the current version.<br />
+Then copy the new config file to the karaf/etc folder.
+Repeat steps to show the new configuration has resulted in the instantiation of a new service.</p>
+  </li>
+  <li>
+    <p>Show the installed camel context from the karaf console.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; camel:context-list
+ Context              Status         Uptime
+ -------              ------         ------
+ clientCamelContext   Started        24 minutes
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Show the installed camel route from the karaf console.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; camel:route-list clientCamelContext
+
+ Context              Route          Status
+ -------              -----          ------
+ clientCamelContext   dbtestRoute    Started
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="todo">TODO</h3>
+
+<p>Modify the client to use a config file for its own reference property placeholder that is used for the sql statement</p>
+
+<p>Modify the client to use a config file to select which data source is used by the datasource bean.</p>
+
+<h2 id="analysis">Analysis</h2>
+
+<h2 id="step-by-step-tutorial">Step by Step Tutorial</h2>
+
+<h3 id="create-the-maven-pom-structure">Create the Maven POM Structure</h3>
+
+<p>This section provides a step by step tutorial to create the sample code.</p>
+
+<ol>
+  <li>
+    <p>Create a parent pom project using the maven pom-root archetype.  This will create a new subdirectory named after the artifactId (jdbc).</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ mvn archetype:generate ^
+  -DarchetypeGroupId=org.codehaus.mojo.archetypes ^
+  -DarchetypeArtifactId=pom-root ^
+  -DarchetypeVersion=1.1 ^
+  -DgroupId=net.eost.example.osgi ^
+  -DartifactId=jdbc ^
+  -DinteractiveMode=false ^
+  -Dversion=1.0-SNAPSHOT
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Change to the new jdbc parent-pom directory. Create a child maven project for the mysql datasource service using the camel-blueprint archetype.  The ^ signs below are for a windows batch script.  Use \ for linux.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ cd jdbc
+$ mvn archetype:generate ^
+  -DarchetypeGroupId=org.apache.camel.archetypes ^
+  -DarchetypeArtifactId=camel-archetype-blueprint ^
+  -DarchetypeVersion=2.14.0 ^
+  -DgroupId=net.eost.example.osgi.jdbc ^
+  -DartifactId=mysql ^
+  -Dpackage=net.eost.example.osgi.jdbc.mysql ^
+  -Dversion=1.0-SNAPSHOT ^
+  -DinteractiveMode=false ^
+  -Dcamel-version=2.12.3 ^
+  -Dlog4j-version=1.2.17 ^
+  -Dmaven-bundle-plugin-version=2.4.0 ^
+  -Dmaven-compiler-plugin-version=2.5.1 ^
+  -Dmaven-resources-plugin-version=2.6 ^
+  -Dslf4j-version=1.7.7
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>In the same jdbc parent-pom directory create another child maven project for the client.  Note that the client is using a different maven prototype than the service.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mvn archetype:generate ^
+  -DarchetypeGroupId=org.apache.camel.archetypes ^
+  -DarchetypeArtifactId=camel-archetype-blueprint ^
+  -DarchetypeVersion=2.14.0 ^
+  -DgroupId=net.eost.example.osgi.jdbc ^
+  -DartifactId=client ^
+  -Dversion=1.0-SNAPSHOT ^
+  -DinteractiveMode=false ^
+  -Dpackage=net.eost.example.osgi.jdbc.client ^
+  -Dcamel-version=2.12.3 ^
+  -Dlog4j-version=1.2.17 ^
+  -Dmaven-bundle-plugin-version=2.4.0 ^
+  -Dmaven-compiler-plugin-version=2.5.1 ^
+  -Dmaven-resources-plugin-version=2.6 ^
+  -Dslf4j-version=1.7.7
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="create-the-mysql-datasource-service-bundle">Create the Mysql Datasource Service Bundle</h3>
+
+<p>Go to the mysql child directory created in the previous steps.</p>
+
+<ol>
+  <li>
+    <p>Delete the default source packages generated by the archetype in the mysql/src/main/java directory.  You will actually not need any source code for this bundle.</p>
+  </li>
+  <li>
+    <p>Edit the mysql pom file and add a mysql.version property.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;properties&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+    &lt;project.reporting.outputEncoding&gt;UTF-8&lt;/project.reporting.outputEncoding&gt;
+    
+    &lt;mysql.version&gt;5.1.26&lt;/mysql.version&gt;
+&lt;/properties&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Still editing the mysql pom, add the following dependency for the mysql driver.<br />
+Note that it is marked as provided.
+The driver jar will be available at compile time in the developer environment classpath via maven.
+At runtime it will be provided by the OSGI container.  This in turn that the driver bundle is provisioned into the karaf container.
+The mysql service bundle will expect for it to be previously installed.  If it is not then it will throw an error.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;dependencies&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;mysql&lt;/groupId&gt;
+        &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
+        &lt;version&gt;${mysql.version}&lt;/version&gt;
+        &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;
+&lt;/dependencies&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Still editing the mysql pom, modify the maven-bundle-plugin as shown below.
+Note that there are <em>no exports</em>.  This may seem surprising at first if you are accustomed to tight coupling between bundles using package imports and exports.
+If there are no exported packages how will the client get access to the datasource?<br />
+The answer is that the client does import the javax.sql package so that it can get access to the javax.sql.DataSource <em>interface</em>.<br />
+But the interface is provided by the OSGI Services API so the client does not even know whether it is mysql or an oracle or a postgres realization of the interface.
+Blueprint provides access to the OSGI Service API using familiar xml style declarative dependency injection.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;plugins&gt;
+    &lt;plugin&gt;
+        &lt;groupId&gt;org.apache.felix&lt;/groupId&gt;
+        &lt;artifactId&gt;maven-bundle-plugin&lt;/artifactId&gt;
+        &lt;version&gt;2.4.0&lt;/version&gt;
+        &lt;extensions&gt;true&lt;/extensions&gt;
+        &lt;configuration&gt;
+            &lt;instructions&gt;
+                &lt;Import-Package&gt;com.mysql.jdbc.jdbc2.optional&lt;/Import-Package&gt;
+            &lt;/instructions&gt;
+        &lt;/configuration&gt;
+    &lt;/plugin&gt;
+&lt;/plugins&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Create the msf-mysql.xml blueprint configuration file in the src/main/resources/OSGI-INF/blueprint directory as shown below.</p>
+  </li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;blueprint xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:cm="http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.1.0"
+           xmlns:camel="http://camel.apache.org/schema/blueprint"
+           xsi:schemaLocation="
+       http://www.osgi.org/xmlns/blueprint/v1.0.0 http://www.osgi.org/xmlns/blueprint/v1.0.0/blueprint.xsd
+       http://camel.apache.org/schema/blueprint http://camel.apache.org/schema/blueprint/camel-blueprint-2.12.0.xsd
+       http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.1.0 http://aries.apache.org/schemas/blueprint-cm/blueprint-cm-1.1.0.xsd"&gt;
+
+    &lt;cm:managed-service-factory id="msf-ds-mysql"
+                                factory-pid="msf.ds.mysql" 
+                                interface="javax.sql.DataSource" &gt;
+        &lt;service-properties&gt;
+            &lt;entry key="osgi.jdbc.driver.class" value="com.mysql.jdbc.Driver"/&gt;
+            &lt;entry key="osgi.jdbc.driver.name" value="mysql"/&gt;
+            &lt;cm:cm-properties persistent-id="" update="true"/&gt;
+        &lt;/service-properties&gt;
+        &lt;cm:managed-component class="com.mysql.jdbc.jdbc2.optional.MysqlDataSource"&gt;
+            &lt;cm:managed-properties persistent-id="" update-strategy="container-managed"/&gt;
+        &lt;/cm:managed-component&gt;
+    &lt;/cm:managed-service-factory&gt;
+
+&lt;/blueprint&gt;
+</code></pre></div></div>
+
+<h3 id="create-the-camel-mysql-client-bundle">Create the Camel-Mysql Client Bundle</h3>
+
+<ol>
+  <li>
+    <p>Delete the default source and test packages generated by the archetype in the mysql/src/main/java directory.
+Also delete the default blueprint.xml file located in the src/main/resources/OSGI-INF/blueprint directory.</p>
+  </li>
+  <li>
+    <p>Edit the client pom file and add the camel.version property shown below.  Change any existing dependencies to use the property <code class="language-plaintext highlighter-rouge">${camel.version}</code> rather than the hardcoded values generated by the archetype.</p>
+
+    <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <camel.version>2.12.3</camel.version>
+</properties>
+  </li>
+  <li>
+    <p>Still editing the client pom file, add the camel-mysql dependency.  Also add a dependency on the mysql service we created in the previous step.
+Note that the camel-sql scope is marked as provided.
+This means that while at compile time Maven will have responsibility for providing access to the jar on the classpath, but at runtime the camel-sql bundle will be by provided by the OSGI container.
+This means that the camel-sql bundle will have to be provisioned to the OSGI container in advance.  This can be done in our example by simply installing the camel-sql feature which is included in the Talend ESB distribution.
+Also note that the mysql datasource service bundle is marked as test scope.
+This means anything that depends on this client package will <em>not</em> have a transitive dependency on the mysql data source service provider.
+That is the intent, the data source provider is completely pluggable and is only needed for testing.
+One consequence of this is that the OSGI manifest headers in the resulting bundle generated by the maven-bundle-plugin will <em>not</em> import the mysql bundle.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.camel&lt;/groupId&gt;
+    &lt;artifactId&gt;camel-sql&lt;/artifactId&gt;
+    &lt;version&gt;${camel.version}&lt;/version&gt;
+    &lt;scope&gt;provided&lt;/scope&gt;
+&lt;/dependency&gt;
+
+&lt;dependency&gt;
+    &lt;groupId&gt;net.eost.example.osgi.jdbc&lt;/groupId&gt;
+    &lt;artifactId&gt;mysql&lt;/artifactId&gt;
+    &lt;version&gt;1.0-SNAPSHOT&lt;/version&gt;
+    &lt;scope&gt;test&lt;/scope&gt;
+&lt;/dependency&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Still editing the client pom, modify the maven-bundle-plugin as shown below.
+We only need the standard maven-bundle-plugin defaults.
+Note that this bundle is a client and not surprisingly does not need any exports.<br />
+Somewhat more surprisingly, it also does not need any explicit package imports from the mysql service bundle.
+Since the mysql jar is marked as optional, any of its transitive dependencies will not be included in the generated package imports created by the maven-bundle-plugin.
+The javax.sql package is a dependency of the camel-sql jar, however, so it will be included, but the mysql specific packages will not be included.
+This is by design.  There is only a <em>runtime</em> dependency on the service interface.  However, we do need some compile-time and test-time dependency so that we can actually test it.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;plugins&gt;
+    &lt;plugin&gt;
+        &lt;groupId&gt;org.apache.felix&lt;/groupId&gt;
+        &lt;artifactId&gt;maven-bundle-plugin&lt;/artifactId&gt;
+        &lt;version&gt;2.4.0&lt;/version&gt;
+        &lt;extensions&gt;true&lt;/extensions&gt;
+    &lt;/plugin&gt;
+&lt;/plugins&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Create the client.xml blueprint configuration file in the src/main/resources/OSGI-INF/blueprint directory as shown below.</p>
+
+    <p>&lt;?xml version=”1.0” encoding=”UTF-8”?&gt;</p>
+    <blueprint xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cm="http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.1.0" xmlns:camel="http://camel.apache.org/schema/blueprint" xsi:schemaLocation="
+       http://www.osgi.org/xmlns/blueprint/v1.0.0 http://www.osgi.org/xmlns/blueprint/v1.0.0/blueprint.xsd
+       http://camel.apache.org/schema/blueprint http://camel.apache.org/schema/blueprint/camel-blueprint-2.12.0.xsd
+       http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.1.0 http://aries.apache.org/schemas/blueprint-cm/blueprint-cm-1.1.0.xsd">
+
+    <reference id="myds" interface="javax.sql.DataSource" filter="(&amp;(dsname=myds_id)(osgi.jdbc.driver.class=com.mysql.jdbc.Driver)(osgi.jdbc.driver.name=mysql))" availability="optional" />
+
+    <camelContext id="clientCamelContext" trace="false" xmlns="http://camel.apache.org/schema/blueprint">
+        <route id="dbtestRoute">
+            <from uri="timer:dbtest?repeatCount=1&amp;delay=3000" />
+            <to uri="sql:select * from customers?dataSource=myds" />
+            <to uri="log:sqlResult" />
+        </route>
+
+    </camelContext>
+
+</blueprint>
+  </li>
+</ol>
+
+<h2 id="other-resources">Other Resources</h2>
+
+<p>Christian Schneider has an excellent and more extensive example using JPA as well as JDBC on his <a href="http://www.liquid-reality.de/display/liquid/2012/01/13/Apache+Karaf+Tutorial+Part+6+-+Database+Access">liquid-reality</a> blog.
+The primary difference is that his example does not use the config-admin Managed Service Factory so it is not a data driven configuration.
+Christian’s example also comes with some nice karaf commandline utilities for listing sql datasources and even executing sql queries from the karaf commandline.
+These are pretty useful for testing and exploring the sql datasources, but they will not work with the vanilla services as implemented in this example.</p>
+
+:ET

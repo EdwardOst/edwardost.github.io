@@ -1,0 +1,27 @@
+I"¡
+<p>Here is a short <strong><a href="http://www.youtube.com/watch?v=UE7zoPLinOI">video</a></strong> showing how to quickly create a <a href="/talend/camel/rest/r02_arin_rest_proxy.zip">REST proxy route</a> using Apache Camel in Talend Studio.</p>
+
+<p><img src="/talend/camel/rest/camel-rest-proxy.png" alt="REST proxy" /></p>
+
+<p>Value added mediation begins with the ability to proxy service endpoints.  This allows the infrastructure to add security, reliable message delivery, location independence, exception management, logging, and other enterprise concerns to basic services.  So although this example is very simple, it is also fundamental for building more complex integrations.</p>
+
+<p>To create a proxy for a REST service Talend Studio uses the cHTTP endpoint.  When used at the beginning of a route, the cHTTP endpoint uses the <a href="http://camel.apache.org/jetty.html">camel-jetty</a> component to create a Camel <em>consumer</em> to receive http messages.  Talend Studio also uses the cHTTP endpoint to create a Camel <em>producer</em> that invokes the actual service using the <a href="http://camel.apache.org/http.html">camel-http</a> component.</p>
+
+<p>Camel consumers will automatically map http request headers to Camel headers.  This is great since you can manipulate them with Camelâ€™s large set of predicate and expression languages.  However, Camel producers may also Camel headers to outbound messages.  Sometimes this is desired behavior.  Other times it is not.  So be diligent in managing your headers.  When in doubt, program defensively and use <a href="http://camel.apache.org/how-to-avoid-sending-some-or-all-message-headers.html">removeHeaders</a> to clean out unwanted headers before sending a message to a Camel producer.</p>
+
+<p>Likewise, when parsing inbound messages consider whether you should save the information to a message header or an exchange property.  Exchange properties will not be sent to external processes by camel producers, and they will be available for the life of the exchange, whereas message headers may no longer be available after a response from a Camel producer overwrites the original message.</p>
+
+<p>When creating or proxying a web service, be sure to follow standard REST conventions such as respecting the HTTP ACCEPT header, and using the Content-Type header in the response.  Supporting both XML and JSON is easy with Camel.  Just use the <a href="http://camel.apache.org/xmljson.html">camel-xmljson</a> data format.</p>
+
+<p>You will need to load some addition dependencies using the cConfig component in order to run the camel-xmljson data format.  Version numbers will vary based on your current Studio version.  All libraries are available internally.</p>
+<ul>
+  <li>camel-xmljson-2.10.4</li>
+  <li>json-lib-2.4-jdk15.jar</li>
+  <li>xom-1.2.7.jar</li>
+  <li>commons-lang-2.6.jar</li>
+  <li>ezmorph-1.0.6.jar</li>
+  <li>commons-collections-3.2.1.jar</li>
+  <li>commons-beanutils-1.8.3.jar</li>
+</ul>
+
+:ET

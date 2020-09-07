@@ -1,0 +1,138 @@
+I"M)
+<p>Here is a simple example of how to use OSGI Blueprint to provide services which are invoked via bean components within larger Camel routes.
+The design pattern is to decouple dynamic service injection from mediation and routing.</p>
+
+<p>There are two logical modules, services and mediation.</p>
+<ul>
+  <li>Services are provided as OSGI bundles using blueprint.</li>
+  <li>Mediation and routing is provided via a <a href="http://camel.apache.org/">Camel</a> route using <a href="http://www.talend.com/download?qt-download_landing=4#qt-download_landing">Talend Open Studio for ESB</a>.</li>
+</ul>
+
+<p>The <a href="/talend/camel/osgi/osgi_helloworld.zip">sample route</a> is available for download and there is a youtube [design] walk-through of the route available as well.
+The sample <a href="https://github.com/EdwardOst/demo-template/tree/master/osgi/samples-1.0.0/blueprint/helloworld">helloworld service</a> for the OSGI services is available from github.</p>
+
+<h2 id="services">Services</h2>
+
+<p>The <a href="https://github.com/EdwardOst/demo-template/tree/master/osgi/samples-1.0.0/blueprint/helloworld">helloworld service</a> is copied from the Apache Aries blueprint <a href="http://aries.apache.org/documentation/tutorials/blueprinthelloworldtutorial.html">helloworld samples</a>.
+It has been modified so that there are two alternative implementation of the service API.
+There are a total of four bundles.</p>
+<ul>
+  <li>Helloworld API</li>
+  <li>Helloworld Server</li>
+  <li>Helloworld Server 2</li>
+  <li>Simple OSGI client</li>
+</ul>
+
+<p>You can follow the <a href="https://github.com/EdwardOst/demo-template/blob/master/osgi/samples-1.0.0/blueprint/helloworld/README.md">helloworld readme</a> to build and install the the sample services.
+The basic design decision is that a service is responsible for registering itself with the container and that this is done via Blueprint.
+By convention, the blueprint for a bundle is located in OSGI-INF/blueprint under resources.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    &lt;bean id="helloservice"
+            class="org.apache.aries.samples.blueprint.helloworld.server.HelloWorldServiceImpl"
+            init-method="startUp"&gt;
+    &lt;/bean&gt;
+
+    &lt;service ref="helloservice"
+            interface="org.apache.aries.samples.blueprint.helloworld.api.HelloWorldService" /&gt;
+</code></pre></div></div>
+
+<p>The extract from the Helloworld Server example above says, create a regular bean based on the HelloWorldServiceImpl class, and then register it with the OSGI container using the HelloworldService interface.</p>
+
+<h2 id="mediation">Mediation</h2>
+
+<p>This example uses Talend Studio to create the Camel routes, but Camel routes can be created using the Camel Java domain specific langauge (DSL) in any Java editor, or routes can be created with either the Spring or Blueprint XML based DSL’s.</p>
+
+<p><img src="/talend/camel/osgi/camel-osgi-bean-route.jpg" alt="bean-mediation" /></p>
+
+<p>As shown above, we can see that the Camel route depends upon a local bean with id helloworldService and expects a method called hello.
+The actual bean configuration is done via the Spring tab.  The contents of the Spring tab are extracted below.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    &lt;bean id="helloworldService" class="org.apache.aries.samples.blueprint.helloworld.server.HelloWorldServiceImpl"/&gt;
+    &lt;!-- osgi:reference id="helloworldService" interface="org.apache.aries.samples.blueprint.helloworld.api.HelloWorldService" / --&gt;
+</code></pre></div></div>
+
+<p>In this case we can see that the bean element is uncommented while the osgi:reference has been commented out.
+The Spring bean will be instantiated by Spring in Studio and will use the HelloWorldServiceImpl class.
+So when running in the Studio the route <em>is</em> coupled to the implementation class.
+After all, we need to test it with something.
+Strictly speaking, however, this could be any implementation of the same interface, and could be a mock rather than the actual bean.</p>
+
+<p>Whether it is the mock or the actual implementatin, these classes have to be provided to Studio.
+In this case we have chosen to use the actual jars.
+They are provided via the cConfig components Dependencies property as shown below.</p>
+
+<p><img src="/talend/camel/osgi/camel-osgi-jar-dependencies.jpg" alt="jar-dependencies" /></p>
+
+<p>This allows us to test the bean and the route in the Studio.
+Once we are ready to deploy, however, responsibility for providing the service realization will fall to the container.
+So we comment out the local Spring bean and uncomment the osgi service reference as shown below.
+Note that this is Spring XML bean configuration rather than blueprint.
+Both support OSGI.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    &lt;!-- bean id="helloworldService" class="org.apache.aries.samples.blueprint.helloworld.server.HelloWorldServiceImpl"/ --&gt;
+    &lt;osgi:reference id="helloworldService" interface="org.apache.aries.samples.blueprint.helloworld.api.HelloWorldService" /&gt;
+</code></pre></div></div>
+
+<p>In addition to tweaking the bean configuration, we also no longer need the jars files.
+They will be provided by the OSGI context as well.
+So we can deactivate the cConfig componoent in the design canvas (right click and select Deactivate).</p>
+
+<p>One step remains.  Although we do not wish to embed the actual jars, we wish to express our dependency on just the <em>API</em> package.
+This is an important distinction.  The cConfig component provides an means of embedding or requiring <em>jars</em> while what we want is the more fine-grained, declarative <em>package</em> level dependency.
+Both are supported by OSGI but package level dependency management is the best practice.</p>
+
+<p><img src="/talend/camel/osgi/camel-osgi-package-dependencies.jpg" alt="package-dependencies" /></p>
+
+<h2 id="demonstration">Demonstration</h2>
+
+<p>To demonstrate the functionality try the following steps.</p>
+
+<ol>
+  <li>Download and deploy a Karaf instance.  I suggest the <a href="http://www.talend.com/download?qt-download_landing=4#qt-download_landing">Talend Open Studio for ESB</a> since it includes the GUI we will use for the Camel routes.</li>
+  <li>Download the <a href="https://github.com/EdwardOst/demo-template/tree/master/osgi/samples-1.0.0/blueprint/helloworld">helloworld service</a> following the instructions on the github site.  This should have two instances the helloworld service implementation as well as the api and a sample client.</li>
+  <li>
+    <p>Build the helloworld service and deploy the helloworld api and the two helloworld imlpementations to the Karaf instance.</p>
+
+    <p>install mvn:org.apache.aries.samples.blueprint.helloworld/org.apache.aries.samples.blueprint.helloworld.api/1.0.0
+ install mvn:org.apache.aries.samples.blueprint.helloworld/org.apache.aries.samples.blueprint.helloworld.server/1.0.0
+ install mvn:org.apache.aries.samples.blueprint.helloworld/org.apache.aries.samples.blueprint.helloworld.client/1.0.0</p>
+  </li>
+  <li>The client will run once and will invoke the server implementation.</li>
+  <li>Install the second helloworld implementation.
+ install mvn:org.apache.aries.samples.blueprint.helloworld/org.apache.aries.samples.blueprint.helloworld.server_2/1.0.0</li>
+  <li>Rerun the client by restarting it.  Note that it still continues to execute with server 1.</li>
+  <li>Stop the first helloworld server.</li>
+  <li>Rerun (restart) the client.  Note that it now uses server 2.</li>
+  <li>Start server 1.  Now both server 1 and server 2 are running.</li>
+  <li>Download the <a href="/talend/camel/osgi/osgi_helloworld.zip">sample route</a> zip file and use Import Items in Talend Studio.</li>
+  <li>You will need to (re)specify the location of the helloworld jars in the cConfig component to point at the jars you built from the git download using the Modules View.</li>
+  <li>Run the route in Talend Studio.</li>
+  <li>Comment out the spring bean declaration and uncomment the OSGI service bean declaration.  Deactivate the cConfig component.</li>
+  <li>Deploy the Talend Studio route to your Karaf instance.</li>
+  <li>You will see route trigger every 5 seconds.  It will be consistently invoking either server 1 or server 2.</li>
+  <li>Stop the server implementation being used by the route.</li>
+  <li>Notice that the other server immediately picks up.</li>
+  <li>Now stop the one remaining service.  Notice that the route blocks.  It would eventually timeout if left too long.</li>
+  <li>Start one of the two services.  The Camel route and OSGI service client immediately resumes.</li>
+</ol>
+
+<h2 id="analysis">Analysis</h2>
+
+<p>Apache Camel realizes enterprise integration patterns (<a href="http://camel.apache.org/enterprise-integration-patterns.html">EIP</a>) described in the book by <a href="http://www.eaipatterns.com/">Hohpe and Woolf</a>.
+One of the most obvious but sometimes overlooked patterns is the simple <a href="http://www.eaipatterns.com/MessagingAdapter.html">Service Activator Pattern</a>.
+Camel realizes this using the <a href="http://camel.apache.org/bean">Bean Component</a>.
+While the Camel Bean component provides clean separation of concerns from the mediation and routing side, management of the provisioning and lifecycle of beans is delegated to the container.</p>
+
+<p>In some cases the added separation of concerns may also benefit the allocation of responsibility across development teams.
+For example, business logic developers can continue to work with just POJO’s while integration developers can focus on mediation logic.
+This is true for both Spring and OSGI alternatives and can work effectively even across enteprrise organizational boundaries, e.g. SDK.</p>
+
+<p>What is more complicated is when multiple service providers have to exist in the same runtime environment.
+In many cases a Spring container is sufficient for the framework.
+But in some cases the added power of OSGI services provide a more powerful alternative for enterprise solutions at runtime.
+This is frequently the case in SaaS or iPaaS environments.
+In these cases OSGI provides a standards based runtime environment that can successfully encapsulate different service realizations.</p>
+
+<p>Since Camel supports Spring and Blueprint xml based configuration as well as Spring and Karaf containers, developers have a full set of choices.</p>
+
+:ET

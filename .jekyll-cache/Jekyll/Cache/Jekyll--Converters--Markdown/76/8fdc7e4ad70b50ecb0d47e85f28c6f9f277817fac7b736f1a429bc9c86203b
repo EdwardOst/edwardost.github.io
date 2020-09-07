@@ -1,0 +1,268 @@
+I"�]
+<p>This page documents some of the conventions around Studio Context Variables as well as how to use Camel Property Placeholders in Routes.  It covers both the Studio as well as Runtime configuration and concerns.</p>
+
+<h3 id="why-are-property-placeholders-better-than-context-variables">Why are Property Placeholders better than Context Variables</h3>
+
+<p>Property Placeholders are part of the underlying framework for both Spring and Camel.  In contrast, Context Variables is a custom API limited to just Talend.  As such Context Variables will not work outside of code generated in Studio.</p>
+
+<p>Property Placeholders can be wired to the OSGI Config-Admin service which is part of the OSGI standard.  While this happens as well with Context Variables, it is done in a non-standard way which is again limited to Studio.  The Studio approach creates Config Admin services for the route, but they are not made visible via corresponding cfg files in the etc folder.  As a result, Context Variables cannot be easily edited by the Operations team during runtime except with the use of the TAC (although this document will show you how to do it using the Talend conventions).</p>
+
+<p>In contrast, Property Placeholders are easily and directly integrated with OSGI Config-Admin using either Spring or Blueprint.  Since Studio only supports Spring we stick to that here.</p>
+
+<p>Even when connected to the OSGI Config Admin service, Studio Context Variables are not wired to Camel.  So you cannot use them using the simple  format.  Instead you have to use quotes and build Java strings.  This can be a problem when dealing with complex Expression Builders in the GUI.  In contrast, PropertyPlaceholders are supported by both Spring and Blueprint flavors of Camel DSL as well as the Java DSL.</p>
+
+<p>More fundamentally, the Talend Context Variable generated code hardcodes the explicit properties specified in Studio.  This results in unnecessarily tight coupling.  The basic Map style interface is sufficiently controlled and much more extensible and loosely coupled.</p>
+
+<p>My recommendation is that you avoid using Context Variables when possible and just use Property Placeholders.</p>
+
+<h3 id="basic-property-placeholder-route-summary">Basic Property Placeholder Route Summary</h3>
+
+<p>A <a href="/talend/camel/properties/property_placeholder.zip">basic sample route</a> is provided.  It should run out of the box.  I suggest publishing it via Nexus rather than using a Kar files.  A <a href="/talend/camel/properties/property_placeholder_with_camel_context_var.zip">more complex example</a> is also available.  It includes the complete end-to-end code that loads the Talend Context Variables and makes them available as Camel Property Placeholders.</p>
+
+<p><img src="/talend/camel/properties/property_placeholder_sample_route.jpg" alt="PropertyPlaceholder Sample Route" /></p>
+
+<p>The route shown above sends a message every five seconds.  The body of the message is initialized using both Camel Property Placeholders and Studio Context Variables using the cSetBody_1 expression below.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>context.prop1 + "   "
+</code></pre></div></div>
+
+<p><img src="/talend/camel/properties/ContextVariables.jpg" alt="Talend Studio Context Variables" /></p>
+
+<p>The  and {prop3}} are Camel Property Placeholders populated from properties Resources.  The cConfig component includes the code which connects the property resources to the CamelPropertyPlaceholder so the properties are available to the routes.  Exposed properties can be used in any Camel Expression with the  syntax, and indeed can even be used to set a Camel Endpoint URI so that the transport and endpoint configuration are completely externalized.</p>
+
+<p>The properties resources are populated from properties files.  The path for one such resource is loaded from the Talend Context Variable configProperties.  Note the classpath: prefix.  This will search the jar in the Studio environment and the bundle in the runtime environment.  Any resources associated with the Route will be included in the deployed bundle.</p>
+
+<p>The other property file is specified in the spring.xml file.  In the Studio environment this is done with a Spring PropertiesFactoryBean.  At runtime this is done with a Spring Dynamic Modules OSGI cm-properties bean.  These beans have the same id, and only one should be active in a given environment.</p>
+
+<p>Note that when sharing Routes which have Resource dependencies with Export Items you should be sure to check the Export Dependencies box so that all Resources are included in the zip file.</p>
+
+<p>Camel Properties are loaded sequentially, so any common keys will overwrite previous entries.  In this case the code in the cConfig loads the property file specified in the Talend Context first.  That means the properties specified in the Spring XML configuration will override them.</p>
+
+<h3 id="property-placeholders">Property Placeholders</h3>
+
+<p>If you are using Talend you already know what Context variables are.  However, you may not know what PropertyPlaceholders are.  PropertyPlaceholders are originally from Spring.  There is a similar concept in Camel.</p>
+
+<p>In the <a href="http://docs.spring.io/spring/docs/3.1.x/spring-framework-reference/htmlsingle/spring-framework-reference.html#beans-factory-placeholderconfigurer">Spring PropertyPlaceholder</a> example below the properties file jdbc.properties is read and the properties with key jdbc.username and jdbc.password are used to initialize the username and password properties respectively on the java bean dataSource.  Note the default Spring syntax is to use ${propertyKey} to identify property placeholders.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"&gt;
+  &lt;property name="locations" value="classpath:com/foo/jdbc.properties"/&gt;
+&lt;/bean&gt;
+&lt;bean id="dataSource" destroy-method="close"
+
+	class="org.apache.commons.dbcp.BasicDataSource"&gt;
+  &lt;property name="driverClassName" value="${jdbc.driverClassName}"/&gt;
+  &lt;property name="url" value="${jdbc.url}"/&gt;
+  &lt;property name="username" value="${jdbc.username}"/&gt;
+  &lt;property name="password" value="${jdbc.password}"/&gt;
+&lt;/bean&gt;
+</code></pre></div></div>
+
+<p>As noted in the documentation, <a href="http://camel.apache.org/how-do-i-use-spring-property-placeholder-with-camel-xml.html">Spring Property Placeholders are not supported within Camel Spring XML</a>, the Spring Property Placeholders will work in the non-Camel portions of the Spring XML file, just not within the Camel Context subject to the qualifications noted.  And of course Spring Property Placeholders are not supported when using Camel Java DSL which is what the Studio uses.  <a href="http://camel.apache.org/using-propertyplaceholder.html">Camel Property Placeholders</a> fill this gap.  They are similar but they use double curly-brackets  to identify placeholders  (not sure if this will render in wiki).  In the example below Camel property placeholders are used extensively not just in primitive bean properties but in properties of the Camel Context itself.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;camelContext trace="" xmlns="http://camel.apache.org/schema/spring"&gt;
+
+	&lt;propertyPlaceholder id="properties" location="org/apache/camel/spring/processor/myprop.properties"/&gt;
+ 
+	&lt;template id="camelTemplate" defaultEndpoint=""/&gt;
+ 
+	&lt;route&gt;
+		&lt;from uri=""/&gt;
+		&lt;setHeader headerName=""&gt;
+			&lt;simple&gt;${in.body} World!&lt;/simple&gt;
+		&lt;/setHeader&gt;
+		&lt;to uri=""/&gt;
+	&lt;/route&gt;
+&lt;/camelContext&gt;
+</code></pre></div></div>
+
+<h3 id="context-variable-conventions">Context Variable Conventions</h3>
+
+<p>OK, Context Variables are bad but how do I use them?  The convention in Talend is that when you publish your route called MyRoute with Context Groups Default and Production, there will be three (not two) corresponding OSGI Configuration Admin configurations created.  They will have the service pid’s shown below:</p>
+
+<ul>
+  <li>MyRoute</li>
+  <li>MyRoute.talendcontext.Default</li>
+  <li>MyRoute.talendcontext.Production</li>
+</ul>
+
+<p>You can display these Config Admin configurations from the karaf console using this command</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>karaf&gt; config:list | grep -i MyProperty
+</code></pre></div></div>
+
+<p>Or you can navigate to the Karaf console in the browser to Configuration Status-&gt;Configurations and do a search with ctrl-f in your browser.</p>
+
+<p><img src="/talend/camel/properties/configuration_status.jpg" alt="Configuration Status" /></p>
+
+<p>I find the Configuration Status view the easiest to use because it is just one long page and it shows everything.  However it does not allow you to edit anything.  You can edit Configurations using the Configuration tab in the Karaf Console shown below.</p>
+
+<p><img src="/talend/camel/properties/configuration.jpg" alt="Configuration" /></p>
+
+<p>You might well expect to see a separate cfg file in the etc folder for each of the three Config Admin configurations created for your Context Variables.However, if you check the containerBase/etc folder you will not find any.  If you create your own etc/MyRoute.cfg file you can override which Context Variable Group to use by setting the context property within the property file as shown below.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># this value is case sensitive.  In our case we had two Studio Context Variable groups called 'Default' and 'karaf' so one of the two lines below would select the desired Context Variable group.
+
+# context = Default
+
+context = karaf
+
+prop1=parent-override
+</code></pre></div></div>
+
+<p>In the example above we have also overridden one of the context variables named ‘prop1’ and assigned it a new value that is presumably different than the value assigned in the Studio Context Variable group <code class="language-plaintext highlighter-rouge">karaf</code>.</p>
+
+<p>You might expect that you could also override individual properties on a per Context Group basis.  For example, you might think that you could edit the MyRoute.talendcontext.karaf.cfg file and change the <code class="language-plaintext highlighter-rouge">prop1</code> value, thereby separating the configuration for different groups.  But that does not work.  Although the Config Admin configuration will get loaded into the OSGI environment, it will not be loaded sufficiently early in the bundle lifecycle to be used by the Camel Property Placeholder.  Instead, the parent configuration will be loaded, the camel property placeholder will be loaded, the route builders will be called (using just the parent configuration values), and then perhaps the child config admin will be loaded when it is too late.</p>
+
+<p>So if you want to keep sets of custom overrides in the etc folder, I suggest copying and pasting entire sections dedicated to each individual configuration and block commenting out the entire section to keep it simple.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># context = Default
+
+# prop1=default-prop1-override
+
+context = karaf
+
+prop1=karaf-prop1-override
+</code></pre></div></div>
+
+<h3 id="camel-property-placeholder">Camel Property Placeholder</h3>
+
+<p>So after all of that we can now use override Context Variables in the etc folder or via the Karaf console at runtime.  But we are still limited in how we use context variables to the clunky Java string manipulation.  We can only support the right portion of the Expression statement below in Studio.</p>
+
+<p><img src="/talend/camel/properties/ContextVariable_injection.jpg" alt="Context Variable Injection" /></p>
+
+<p>If we were using Camel with Spring we would use a PropertyPlaceholder element within the CamelContext element.  However, Studio does not use Spring XML (or Blueprint) configuration of Camel routes.  It uses JavaDSL.  So the appropriate method is to use the cConfig component as shown below.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import org.apache.camel.component.properties.PropertiesComponent;
+
+propertiesComponent pc = new PropertiesComponent();
+pc.setLocation( "classpath:propertyPlaceholder/MyRoute.properties");
+camelContext.addComponent("properties", pc);
+</code></pre></div></div>
+
+<p>In the example above the myProperties.properties file will be looked up on the classpath.</p>
+
+<p>If you have more than one property file you can separate them with commas.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import org.apache.camel.component.properties.PropertiesComponent;
+
+propertiesComponent pc = new PropertiesComponent();
+pc.setLocation( "classpath:propertyPlaceholder/MyRoute.properties,classpath:someOtherFile.properties");
+camelContext.addComponent("properties", pc);
+</code></pre></div></div>
+
+<p>Note that the key of the Camel Component must be properties by convention.</p>
+
+<h3 id="studio-route-resources">Studio Route Resources</h3>
+
+<p>How can we add the properties file in the Studio so that it is on the classpath both in the Studio and when deployed to the runtime?  Create a Resource.  In the screenshot below the resource is created in the Studio folder PropertyPlaceholder.  This means that the relative path to the resource on the classpath will also be ‘classpath:PropertyPlaceholder/MyRoute.properties’.</p>
+
+<p><img src="/talend/camel/properties/create_resource.jpg" alt="Create Resource" /></p>
+
+<p>You can either import an existing properties file or you can create an empty resource.  I suggest giving the resource a name with the .properties extension so that Studio will use the default properties editor when you open the resource.  The screenshot below shows the creation of an empty, new properties resource.</p>
+
+<p><img src="/talend/camel/properties/NewPropertiesResource.jpg" alt="Create Route Resource" /></p>
+
+<p>Finally, link the new resource to the Camel Route.</p>
+
+<p><img src="/talend/camel/properties/ManageRouteResources.jpg" alt="Link Route Resource" /></p>
+
+<p><img src="/talend/camel/properties/AddRouteResource.jpg" alt="Link Route Resource" /></p>
+
+<h3 id="property-resource-management">Property Resource Management</h3>
+
+<p>If we want to be a little clever, we can even manage which properties file we use via a the Context Variables.  In the code below the Studio Context Variables have already been loaded, so they can be reference in the cConfig component to lookup the resource path to be used.  (In this case we happen to use the same properties resource for both Karaf and Default configurations, but they could be different.)</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import org.apache.camel.component.properties.PropertiesComponent;
+
+PropertiesComponent pc = new PropertiesComponent();
+pc.setLocations( new String[]{ context.configProperties.toString() });
+camelContext.addComponent("properties", pc);
+</code></pre></div></div>
+
+<p><img src="/talend/camel/properties/SpecifyingPropertiesFiles_with_ContextVariables.jpg" alt="Specify Property Files with Context Variables" /></p>
+
+<p>Another issue is having a single point of control for the properties resources we are loading as Camel Placeholder Properties.  It is easy to lose these details in the procedural code.  It is better to externalize them in the Spring XML and to centralize them in a single bean if possible.  Currently we have both OSGI Config-Admin loaded resources as well as classpath: resources.  We may wish to have both resources available to Camel.  Plus we will want to control the precedence for which resources act as the defaults and which are the overrides.  In order to have a single place to manage these declaratively, we introduce the Spring PropertiesFactoryBean in the XML section.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;!-- comment out when using in runtime --&gt;
+&lt;bean id="cmProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean"&gt;
+	&lt;property name="ignoreResourceNotFound" value="true"/&gt;
+	&lt;property name="location" value="classpath:PropertyPlaceholder/property_placeholder_cm.properties"/&gt;
+&lt;/bean&gt;
+</code></pre></div></div>
+
+<p>We then reference the PropertiesFactoryBean in the cConfig code that loads the Camel PropertyPlaceholder with the ref: prefix.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>PropertiesComponent pc = new PropertiesComponent();
+pc.setLocation( context.configProperties.toString() + "," + "ref:cmProperties");
+camelContext.addComponent("properties", pc);
+</code></pre></div></div>
+
+<p>There is one last step remaining.  The new PropertiesFactoryBean is included in the Studio classpath, but it is not included in the runtime classpath unless we add it.  Fortunately it already deploy in the runtime container, so it is just a matter of adding it  package to our bundle classpath imports using the Edit Route Manifest as shown below.</p>
+
+<p><img src="/talend/camel/properties/edit_route_manifest.jpg" alt="Specify Property Files with Context Variables" /></p>
+
+<h3 id="camel-property-placeholder-1">Camel Property Placeholder</h3>
+
+<p>OK, so now we can have a separate properties file that follows normal Camel conventions and it will work in Studio.  Plus it will get shipped as part of the bundle since it is defined as a Resource.  We have the advantage of using standard Camel API’s so our code is more portable, and it is easier to use with the  convention.  And we can specify multiple property resources which are still centrally managed.</p>
+
+<p>Unfortunately it is not an OSGI Config-Admin service so it will still not be readily editable by the Operations team via a cfg file in the etc folder, nor will it be visible in the Config Admin service on either the karaf commandline or in the Karaf Console.</p>
+
+<p>To use the OSGI Config-Admin service we can use the Spring XML configuration in Studio with</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;!-- comment out when using in Studio --&gt;
+&lt;osgix:cm-properties id="cmProperties" persistent-id="property_placeholder_cm"&gt;
+	&lt;prop key="firstname"&gt;muffin&lt;/prop&gt;
+	&lt;prop key="osgiProp"&gt;osgi-value&lt;/prop&gt;
+&lt;/osgix:cm-properties&gt;
+</code></pre></div></div>
+
+<p>Adding the xml above in the Spring tab in Studio will load an OSGI Config-Admin service with persistent-id of property_placeholder_cm.  If no such service exists, it will use the default properties for firstname and osgiProp specified.  If the Config-Admin service exists or has been instantiated by a file in the etc folder, the values in the etc properties file will take precedence.  By convention the name of the file would be persistent-id.cfg, so in this case it would be property_placeholder_cm.cfg.</p>
+
+<p>We have specified the same id for this bean as the PropertyFactoryBean.  This means that it will be injected into the Camel Property Placeholder using our previous code, because the ref:cmProperties uri in the CamelPropertyPlaceholder location attribute will match our new OSGI cm-property, which happens to expose the same Property interface created the PropertyFactoryBean.  Unfortunately the osgi:cm-properties elements shown above will not work in Studio.  So you will need to comment them out until you are ready to publish your job.  In the Studio environment the PropertyBeanFactory should be used.  Before publishing to the runtime the PropertyFactoryBean should be commented out, and the osgi:cm-properties element should be uncommented.</p>
+
+<p>Note that once deployed you you will need to restart the Camel bundle in order for any changes to the underlying Config Admin service to take effect because Camel uses a builder pattern, so once the route is created subsequent modifications to Config Admin service do not affect the already instantiated route.</p>
+
+<h3 id="connecting-the-talend-context-to-camel-propertyplaceholder">Connecting the Talend Context to Camel PropertyPlaceholder</h3>
+
+<p>Everything is just about ready now, but we still have two classes of properties.  Regular property resources can now be added and easily referenced. but the same is not true of Talend Context Variables.  If we merge the Talend Context Variables with the other properties in the CamelPropertyPlaceholder we will have access to all properties using the standard Camel API.</p>
+
+<p>We will use this bean to aggregate however many property resources we wish to add to the Camel Property Placeholders.  The updated cConfig is shown below.</p>
+
+<p>Properties configProperties;</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>try {
+	DefaultPropertiesResolver resolver = new DefaultPropertiesResolver();
+	configProperties = resolver.resolveProperties(camelContext, false, context.configProperties);
+} catch (Exception e) {
+	throw new java.util.MissingResourceException("Error loading resource: context.configProperties", this.getClass().getName(), context.configProperties.toString());
+}
+
+// this is necessary because the Talend context Property has its _defaults_ set, but these do not
+// initialize the actual Property collection itself.
+for (String property : context.stringPropertyNames()) {
+	context.put(property, context.getProperty(property));
+	}
+
+
+java.util.Properties contextProperties = camelContext.getRegistry().lookup("contextProperties", Properties.class);
+
+contextProperties.putAll(context);
+contextProperties.putAll(configProperties);
+
+PropertiesComponent pc = new PropertiesComponent();
+pc.setLocation( "ref:contextProperties,ref:cmProperties");
+camelContext.addComponent("properties", pc);
+</code></pre></div></div>
+
+<p>In the example above we will only load the property file identified by the Talend Context Variable configProperties if there is no OSGI Config-Admin with the persistent id of cmProperties.  When we run in the Studio the cmProperties bean will not exist, so the configProperties will be loaded based from the classpath: resource specified in the Talend Context.</p>
+
+<p>Note that the sequence of loading is important.  In the example above the Talend Context Variables will be overwritten by any properties specified in the classpath properties file, and these will in turn be overwritten by the OSGI Config-Admin configuration file if present.</p>
+
+<p>Also note that it is necessary to initialize the Talend Context Variables.  This may seem odd given that the Talend Context variable is extended from Properties.  But only the hardcoded Talend Context Variables are actually initialized.  These values and the setters are not loaded into the actual property.  The readContextValues() method only loads the context variable with defaults with the seeming copy constructor shown below.  But this is deceptive.  This is really quite a terrible piece of code which can result in fundamental semantic differences depending on how the Context is loaded.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>context = new ContextProperties(defaultProps);
+</code></pre></div></div>
+
+<p>Here is a link to the <a href="/talend/camel/properties/property_placeholder_with_camel_context_var.zip">more complex example</a> route exported as a zip.  That’s it.  Hopefully this is helpful.</p>
+
+:ET
